@@ -1,363 +1,401 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, Square, Settings, X } from 'lucide-react';
-
-const GymTimer = () => {
-  // Stati per i timer
-  const [shortTimer, setShortTimer] = useState({ time: 60, isRunning: false, originalTime: 60 });
-  const [longTimer, setLongTimer] = useState({ time: 90, isRunning: false, originalTime: 90 });
-  
-  // Stati per le impostazioni
-  const [showSettings, setShowSettings] = useState(false);
-  const [settings, setSettings] = useState({
-    shortDuration: 60,
-    longDuration: 90,
-    beepCount: 3,
-    beepPause: 200,
-    beepDuration: 300,
-    beepFrequency: 800
-  });
-
-  // Refs per gli intervalli
-  const shortIntervalRef = useRef(null);
-  const longIntervalRef = useRef(null);
-
-  // Funzione per creare il beep
-  const playBeep = async () => {
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    
-    for (let i = 0; i < settings.beepCount; i++) {
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-      
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-      
-      oscillator.frequency.value = settings.beepFrequency;
-      oscillator.type = 'sine';
-      
-      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + settings.beepDuration / 1000);
-      
-      oscillator.start(audioContext.currentTime);
-      oscillator.stop(audioContext.currentTime + settings.beepDuration / 1000);
-      
-      if (i < settings.beepCount - 1) {
-        await new Promise(resolve => setTimeout(resolve, settings.beepDuration + settings.beepPause));
-      }
-    }
-  };
-
-  // Effetti per i countdown
-  useEffect(() => {
-    if (shortTimer.isRunning) {
-      shortIntervalRef.current = setInterval(() => {
-        setShortTimer(prev => {
-          if (prev.time <= 1) {
-            playBeep();
-            return { ...prev, time: 0, isRunning: false };
-          }
-          return { ...prev, time: prev.time - 1 };
-        });
-      }, 1000);
-    } else {
-      clearInterval(shortIntervalRef.current);
-    }
-    return () => clearInterval(shortIntervalRef.current);
-  }, [shortTimer.isRunning]);
-
-  useEffect(() => {
-    if (longTimer.isRunning) {
-      longIntervalRef.current = setInterval(() => {
-        setLongTimer(prev => {
-          if (prev.time <= 1) {
-            playBeep();
-            return { ...prev, time: 0, isRunning: false };
-          }
-          return { ...prev, time: prev.time - 1 };
-        });
-      }, 1000);
-    } else {
-      clearInterval(longIntervalRef.current);
-    }
-    return () => clearInterval(longIntervalRef.current);
-  }, [longTimer.isRunning]);
-
-  // Funzioni di controllo timer
-  const startShortTimer = () => {
-    setShortTimer(prev => ({ ...prev, isRunning: true }));
-  };
-
-  const pauseShortTimer = () => {
-    setShortTimer(prev => ({ ...prev, isRunning: false }));
-  };
-
-  const resetShortTimer = () => {
-    setShortTimer(prev => ({ 
-      ...prev, 
-      time: prev.originalTime, 
-      isRunning: false 
-    }));
-  };
-
-  const startLongTimer = () => {
-    setLongTimer(prev => ({ ...prev, isRunning: true }));
-  };
-
-  const pauseLongTimer = () => {
-    setLongTimer(prev => ({ ...prev, isRunning: false }));
-  };
-
-  const resetLongTimer = () => {
-    setLongTimer(prev => ({ 
-      ...prev, 
-      time: prev.originalTime, 
-      isRunning: false 
-    }));
-  };
-
-  // Funzione per formattare il tempo
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  // Funzione per salvare le impostazioni
-  const saveSettings = () => {
-    setShortTimer(prev => ({ 
-      ...prev, 
-      time: settings.shortDuration, 
-      originalTime: settings.shortDuration,
-      isRunning: false 
-    }));
-    setLongTimer(prev => ({ 
-      ...prev, 
-      time: settings.longDuration, 
-      originalTime: settings.longDuration,
-      isRunning: false 
-    }));
-    setShowSettings(false);
-  };
-
-  // Calcolo della percentuale per la barra di progresso
-  const getProgress = (current, original) => {
-    return ((original - current) / original) * 100;
-  };
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-blue-900 p-4">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">💪 Timer Palestra</h1>
-          <p className="text-gray-300">Gestisci le pause tra gli esercizi</p>
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timer Pause Palestra</title>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --secondary: #3498db;
+            --accent: #e74c3c;
+            --light: #ecf0f1;
+            --dark: #2c3e50;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--light);
+            color: var(--dark);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        
+        .container {
+            background-color: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 500px;
+            padding: 25px;
+            margin-bottom: 20px;
+        }
+        
+        h1 {
+            color: var(--primary);
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .timer-display {
+            font-size: 5rem;
+            text-align: center;
+            margin: 20px 0;
+            font-family: monospace;
+            color: var(--secondary);
+        }
+        
+        .button-group {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        button {
+            background-color: var(--secondary);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 50px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: bold;
+        }
+        
+        button:hover {
+            background-color: var(--primary);
+            transform: translateY(-2px);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        button.reset {
+            background-color: var(--accent);
+        }
+        
+        .settings-toggle {
+            background: none;
+            border: none;
+            color: var(--secondary);
+            text-decoration: underline;
+            cursor: pointer;
+            margin-top: 10px;
+            font-size: 0.9rem;
+        }
+        
+        .advanced-settings {
+            display: none;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+        
+        .advanced-settings.show {
+            display: block;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        input[type="number"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1rem;
+        }
+        
+        .save-btn {
+            background-color: var(--primary);
+            width: 100%;
+        }
+        
+        .active-timer {
+            font-weight: bold;
+            color: var(--accent);
+            text-align: center;
+            margin-bottom: 15px;
+            height: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Timer Pause Palestra</h1>
+        
+        <div class="active-timer" id="activeTimer"></div>
+        
+        <div class="timer-display" id="timerDisplay">01:00</div>
+        
+        <div class="button-group">
+            <button id="shortBreakBtn">Pausa Corta</button>
+            <button id="longBreakBtn">Pausa Lunga</button>
         </div>
-
-        {/* Timer Containers */}
-        <div className="grid md:grid-cols-2 gap-6 mb-8">
-          {/* Timer Pausa Corta */}
-          <div className="bg-gray-800/50 backdrop-blur-lg rounded-2xl p-6 border border-gray-700/50">
-            <div className="text-center mb-6">
-              <h2 className="text-2xl font-bold text-cyan-400 mb-2">⚡ Pausa Corta</h2>
-              <div className="text-6xl font-mono font-bold text-white mb-4">
-                {formatTime(shortTimer.time)}
-              </div>
-              
-              {/* Barra di progresso */}
-              <div className="w-full bg-gray-700 rounded-full h-3 mb-4">
-                <div 
-                  className="bg-gradient-to-r from-cyan-500 to-blue-500 h-3 rounded-full transition-all duration-1000"
-                  style={{ width: `${getProgress(shortTimer.time, shortTimer.originalTime)}%` }}
-                ></div>
-              </div>
-
-              {/* Controlli */}
-              <div className="flex justify-center gap-3">
-                <button
-                  onClick={shortTimer.isRunning ? pauseShortTimer : startShortTimer}
-                  className={`p-3 rounded-full ${
-                    shortTimer.isRunning 
-                      ? 'bg-orange-500 hover:bg-orange-600' 
-                      : 'bg-green-500 hover:bg-green-600'
-                  } text-white transition-colors`}
-                >
-                  {shortTimer.isRunning ? <Pause size={24} /> : <Play size={24} />}
-                </button>
-                <button
-                  onClick={resetShortTimer}
-                  className="p-3 rounded-full bg-red-500 hover:bg-red-600 text-white transition-colors"
-                >
-                  <Square size={24} />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Timer Pausa Lunga */}
-          <div className="bg-gray-800/50 backdrop-blur-lg rounded-2xl p-6 border border-gray-700/50">
-            <div className="text-center mb-6">
-              <h2 className="text-2xl font-bold text-purple-400 mb-2">🏋️ Pausa Lunga</h2>
-              <div className="text-6xl font-mono font-bold text-white mb-4">
-                {formatTime(longTimer.time)}
-              </div>
-              
-              {/* Barra di progresso */}
-              <div className="w-full bg-gray-700 rounded-full h-3 mb-4">
-                <div 
-                  className="bg-gradient-to-r from-purple-500 to-pink-500 h-3 rounded-full transition-all duration-1000"
-                  style={{ width: `${getProgress(longTimer.time, longTimer.originalTime)}%` }}
-                ></div>
-              </div>
-
-              {/* Controlli */}
-              <div className="flex justify-center gap-3">
-                <button
-                  onClick={longTimer.isRunning ? pauseLongTimer : startLongTimer}
-                  className={`p-3 rounded-full ${
-                    longTimer.isRunning 
-                      ? 'bg-orange-500 hover:bg-orange-600' 
-                      : 'bg-green-500 hover:bg-green-600'
-                  } text-white transition-colors`}
-                >
-                  {longTimer.isRunning ? <Pause size={24} /> : <Play size={24} />}
-                </button>
-                <button
-                  onClick={resetLongTimer}
-                  className="p-3 rounded-full bg-red-500 hover:bg-red-600 text-white transition-colors"
-                >
-                  <Square size={24} />
-                </button>
-              </div>
-            </div>
-          </div>
+        
+        <div class="button-group">
+            <button id="pauseBtn" disabled>Pausa</button>
+            <button id="resetBtn" class="reset">Reset</button>
         </div>
-
-        {/* Pulsante Impostazioni */}
-        <div className="text-center">
-          <button
-            onClick={() => setShowSettings(true)}
-            className="bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-full flex items-center gap-2 mx-auto transition-colors"
-          >
-            <Settings size={20} />
-            Impostazioni Avanzate
-          </button>
-        </div>
-
-        {/* Modal Impostazioni */}
-        {showSettings && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-            <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-2xl font-bold text-white">⚙️ Impostazioni</h3>
-                <button
-                  onClick={() => setShowSettings(false)}
-                  className="text-gray-400 hover:text-white"
-                >
-                  <X size={24} />
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                {/* Durata Timer */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Durata Pausa Corta (secondi)
-                  </label>
-                  <input
-                    type="number"
-                    value={settings.shortDuration}
-                    onChange={(e) => setSettings(prev => ({ ...prev, shortDuration: parseInt(e.target.value) || 60 }))}
-                    className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 border border-gray-600 focus:border-cyan-500 outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Durata Pausa Lunga (secondi)
-                  </label>
-                  <input
-                    type="number"
-                    value={settings.longDuration}
-                    onChange={(e) => setSettings(prev => ({ ...prev, longDuration: parseInt(e.target.value) || 90 }))}
-                    className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 border border-gray-600 focus:border-purple-500 outline-none"
-                  />
-                </div>
-
-                {/* Impostazioni Audio */}
-                <div className="border-t border-gray-700 pt-4">
-                  <h4 className="text-lg font-semibold text-white mb-3">🔊 Impostazioni Audio</h4>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Numero di Beep
-                    </label>
-                    <input
-                      type="number"
-                      value={settings.beepCount}
-                      onChange={(e) => setSettings(prev => ({ ...prev, beepCount: parseInt(e.target.value) || 3 }))}
-                      className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 border border-gray-600 focus:border-yellow-500 outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Pausa tra Beep (ms)
-                    </label>
-                    <input
-                      type="number"
-                      value={settings.beepPause}
-                      onChange={(e) => setSettings(prev => ({ ...prev, beepPause: parseInt(e.target.value) || 200 }))}
-                      className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 border border-gray-600 focus:border-yellow-500 outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Durata Beep (ms)
-                    </label>
-                    <input
-                      type="number"
-                      value={settings.beepDuration}
-                      onChange={(e) => setSettings(prev => ({ ...prev, beepDuration: parseInt(e.target.value) || 300 }))}
-                      className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 border border-gray-600 focus:border-yellow-500 outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Frequenza Beep (Hz)
-                    </label>
-                    <input
-                      type="number"
-                      value={settings.beepFrequency}
-                      onChange={(e) => setSettings(prev => ({ ...prev, beepFrequency: parseInt(e.target.value) || 800 }))}
-                      className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 border border-gray-600 focus:border-yellow-500 outline-none"
-                    />
-                  </div>
-                </div>
-
-                {/* Pulsanti */}
-                <div className="flex gap-3 pt-4">
-                  <button
-                    onClick={saveSettings}
-                    className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-medium transition-colors"
-                  >
-                    Salva
-                  </button>
-                  <button
-                    onClick={() => setShowSettings(false)}
-                    className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-3 rounded-lg font-medium transition-colors"
-                  >
-                    Annulla
-                  </button>
-                </div>
-              </div>
+        
+        <button class="settings-toggle" id="settingsToggle">Impostazioni avanzate ▼</button>
+        
+        <div class="advanced-settings" id="advancedSettings">
+            <h3>Impostazioni Timer</h3>
+            <div class="form-group">
+                <label for="shortBreakDuration">Pausa Corta (secondi)</label>
+                <input type="number" id="shortBreakDuration" min="1" value="60">
             </div>
-          </div>
-        )}
-      </div>
+            <div class="form-group">
+                <label for="longBreakDuration">Pausa Lunga (secondi)</label>
+                <input type="number" id="longBreakDuration" min="1" value="90">
+            </div>
+            
+            <h3>Impostazioni Suono</h3>
+            <div class="form-group">
+                <label for="beepCount">Numero di Beep</label>
+                <input type="number" id="beepCount" min="1" value="3">
+            </div>
+            <div class="form-group">
+                <label for="beepInterval">Pausa tra Beep (ms)</label>
+                <input type="number" id="beepInterval" min="10" value="200">
+            </div>
+            <div class="form-group">
+                <label for="beepDuration">Durata Beep (ms)</label>
+                <input type="number" id="beepDuration" min="10" value="100">
+            </div>
+            <div class="form-group">
+                <label for="beepFrequency">Frequenza Beep (Hz)</label>
+                <input type="number" id="beepFrequency" min="100" max="2000" value="800">
+            </div>
+            
+            <button class="save-btn" id="saveSettingsBtn">Salva Impostazioni</button>
+        </div>
     </div>
-  );
-};
 
-export default GymTimer;
+    <script>
+        // Elementi DOM
+        const timerDisplay = document.getElementById('timerDisplay');
+        const shortBreakBtn = document.getElementById('shortBreakBtn');
+        const longBreakBtn = document.getElementById('longBreakBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const settingsToggle = document.getElementById('settingsToggle');
+        const advancedSettings = document.getElementById('advancedSettings');
+        const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+        const activeTimer = document.getElementById('activeTimer');
+        
+        // Elementi impostazioni
+        const shortBreakDurationInput = document.getElementById('shortBreakDuration');
+        const longBreakDurationInput = document.getElementById('longBreakDuration');
+        const beepCountInput = document.getElementById('beepCount');
+        const beepIntervalInput = document.getElementById('beepInterval');
+        const beepDurationInput = document.getElementById('beepDuration');
+        const beepFrequencyInput = document.getElementById('beepFrequency');
+        
+        // Variabili timer
+        let timer;
+        let timeLeft = 60;
+        let isRunning = false;
+        let isPaused = false;
+        let currentTimerType = null;
+        
+        // Impostazioni
+        let settings = {
+            shortBreak: 60,
+            longBreak: 90,
+            beepCount: 3,
+            beepInterval: 200,
+            beepDuration: 100,
+            beepFrequency: 800
+        };
+        
+        // Carica le impostazioni salvate
+        function loadSettings() {
+            const savedSettings = localStorage.getItem('gymTimerSettings');
+            if (savedSettings) {
+                settings = JSON.parse(savedSettings);
+                applySettingsToUI();
+            }
+        }
+        
+        // Applica le impostazioni all'UI
+        function applySettingsToUI() {
+            shortBreakDurationInput.value = settings.shortBreak;
+            longBreakDurationInput.value = settings.longBreak;
+            beepCountInput.value = settings.beepCount;
+            beepIntervalInput.value = settings.beepInterval;
+            beepDurationInput.value = settings.beepDuration;
+            beepFrequencyInput.value = settings.beepFrequency;
+        }
+        
+        // Salva le impostazioni
+        function saveSettings() {
+            settings = {
+                shortBreak: parseInt(shortBreakDurationInput.value) || 60,
+                longBreak: parseInt(longBreakDurationInput.value) || 90,
+                beepCount: parseInt(beepCountInput.value) || 3,
+                beepInterval: parseInt(beepIntervalInput.value) || 200,
+                beepDuration: parseInt(beepDurationInput.value) || 100,
+                beepFrequency: parseInt(beepFrequencyInput.value) || 800
+            };
+            
+            localStorage.setItem('gymTimerSettings', JSON.stringify(settings));
+            alert('Impostazioni salvate!');
+        }
+        
+        // Formatta il tempo in MM:SS
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
+            const secs = (seconds % 60).toString().padStart(2, '0');
+            return `${mins}:${secs}`;
+        }
+        
+        // Aggiorna il display del timer
+        function updateDisplay() {
+            timerDisplay.textContent = formatTime(timeLeft);
+        }
+        
+        // Avvia il timer
+        function startTimer(duration, timerType) {
+            if (isRunning && !isPaused) return;
+            
+            if (!isPaused) {
+                timeLeft = duration;
+            }
+            
+            currentTimerType = timerType;
+            activeTimer.textContent = timerType === 'short' ? 'Pausa Corta' : 'Pausa Lunga';
+            isRunning = true;
+            isPaused = false;
+            
+            pauseBtn.disabled = false;
+            
+            clearInterval(timer);
+            timer = setInterval(() => {
+                timeLeft--;
+                updateDisplay();
+                
+                if (timeLeft <= 0) {
+                    clearInterval(timer);
+                    isRunning = false;
+                    playBeepSequence();
+                    activeTimer.textContent = 'Timer completato!';
+                }
+            }, 1000);
+        }
+        
+        // Mette in pausa il timer
+        function pauseTimer() {
+            if (!isRunning) return;
+            
+            if (isPaused) {
+                startTimer(timeLeft, currentTimerType);
+            } else {
+                clearInterval(timer);
+                isPaused = true;
+                pauseBtn.textContent = 'Riprendi';
+                activeTimer.textContent += ' (in pausa)';
+            }
+        }
+        
+        // Resetta il timer
+        function resetTimer() {
+            clearInterval(timer);
+            isRunning = false;
+            isPaused = false;
+            pauseBtn.disabled = true;
+            pauseBtn.textContent = 'Pausa';
+            
+            if (currentTimerType === 'short') {
+                timeLeft = settings.shortBreak;
+            } else if (currentTimerType === 'long') {
+                timeLeft = settings.longBreak;
+            } else {
+                timeLeft = settings.shortBreak;
+            }
+            
+            updateDisplay();
+            activeTimer.textContent = '';
+        }
+        
+        // Riproduce una sequenza di beep
+        function playBeepSequence() {
+            const beepCount = settings.beepCount;
+            const interval = settings.beepInterval;
+            const duration = settings.beepDuration;
+            const frequency = settings.beepFrequency;
+            
+            let beepsPlayed = 0;
+            
+            function playBeep() {
+                if (beepsPlayed < beepCount) {
+                    playBeepSound(duration, frequency);
+                    beepsPlayed++;
+                    setTimeout(playBeep, interval);
+                }
+            }
+            
+            playBeep();
+        }
+        
+        // Riproduce un singolo beep
+        function playBeepSound(duration, frequency) {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            
+            oscillator.type = 'sine';
+            oscillator.frequency.value = frequency;
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            gainNode.gain.setValueAtTime(1, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration/1000);
+            
+            oscillator.start();
+            oscillator.stop(audioCtx.currentTime + duration/1000);
+        }
+        
+        // Event Listeners
+        shortBreakBtn.addEventListener('click', () => {
+            resetTimer();
+            startTimer(settings.shortBreak, 'short');
+        });
+        
+        longBreakBtn.addEventListener('click', () => {
+            resetTimer();
+            startTimer(settings.longBreak, 'long');
+        });
+        
+        pauseBtn.addEventListener('click', pauseTimer);
+        resetBtn.addEventListener('click', resetTimer);
+        
+        settingsToggle.addEventListener('click', () => {
+            advancedSettings.classList.toggle('show');
+            settingsToggle.textContent = advancedSettings.classList.contains('show') ? 
+                'Impostazioni avanzate ▲' : 'Impostazioni avanzate ▼';
+        });
+        
+        saveSettingsBtn.addEventListener('click', saveSettings);
+        
+        // Inizializzazione
+        loadSettings();
+        updateDisplay();
+    </script>
+</body>
+</html>
